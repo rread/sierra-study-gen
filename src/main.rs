@@ -1,5 +1,7 @@
 use clap::Parser;
-use std::fs::read_to_string;
+use std::convert::Infallible;
+use std::fs::{read_to_string, File};
+use std::io::Write;
 use std::path::Path;
 
 mod study;
@@ -30,18 +32,24 @@ fn escape_str(s: &str) -> String {
 fn gen_main(config: &Study) -> String {
     format!(
         r#"
-int {}Main(sc *SCStudy) {{
-    char * description = "{}";
-    
-    if (sc.Default == TRUE) {{
-        sc.description = description;
+#include "{}.h"
+
+void {}::last_call() {{
+
+}}
+
+void {}::study() {{
+    for (int index = sc.UpdateStartIndex; index < sc.ArraySize; index++) {{
+        // todo
     }}
-    
-    return;
+}}
+
+SCSFExport scsf_{}Main(SCStudyInterfaceRef sc) {{
+    {} study(sc);
+    study.run();
 }}
     "#,
-        config.name,
-        escape_str(&config.description)
+        config.name, config.name, config.name, config.name, config.name,
     )
 }
 
@@ -51,7 +59,7 @@ fn gen_class(config: &Study) -> String {
 #ifndef ACS_{}_H
 #define ACS_{}_H
         
-#include "SCFBase.h"
+#include "SCSFBase.h"
 
 class {} : public SCSFBase {{"#,
         config.name.to_ascii_uppercase(),
@@ -63,6 +71,7 @@ class {} : public SCSFBase {{"#,
     s.push_str(&gen_graph_defs(&config.outputs, 1));
     s.push_str(&gen_defaults(&config, 1));
     s.push_str(&gen_constructor(&config, 1));
+    s.push_str(&gen_methods_decl(&config, 1));
 
     s.push_str(&format!(
         "}};\n#endif // ACS_{}_H\n",
@@ -80,7 +89,7 @@ fn gen_graph_defs(graphs: &Vec<Output>, depth: i8) -> String {
         for graph in graphs.iter() {
             s.push_str(&format!("{}{},\n", indent(depth + 1), graph.enum_name()));
         }
-        s.push_str(&format!("{}}}\n", prefix));
+        s.push_str(&format!("{}}};\n", prefix));
 
         for graph in graphs.iter() {
             s.push_str(&format!("{}SCSubgraphRef {};\n", prefix, graph.var_name()));
@@ -99,10 +108,10 @@ fn gen_input_defs(inputs: &Vec<Input>, depth: i8) -> String {
         for input in inputs.iter() {
             s.push_str(&format!("{}{},\n", indent(depth + 1), input.enum_name()));
         }
-        s.push_str(&format!("\n{}}}\n", prefix));
+        s.push_str(&format!("\n{}}};\n", prefix));
 
         for input in inputs.iter() {
-            s.push_str(&format!("{}SCInputRef {}\n", prefix, input.var_name()));
+            s.push_str(&format!("{}SCInputRef {};\n", prefix, input.var_name()));
         }
     }
     s
@@ -116,8 +125,9 @@ fn gen_defaults(config: &Study, depth: i8) -> String {
         let prefix = indent(depth + 1);
         s.push_str(&format!("{}sc.GraphName = \"{}\";\n", prefix, config.name));
         s.push_str(&format!(
-            "{}sc.Description = \"{}\";\n",
-            prefix, config.description
+            "{}sc.StudyDescription = \"{}\";\n",
+            prefix,
+            escape_str(&config.description),
         ));
         s.push_str(&format!("{}sc.AutoLoop = 0;\n", prefix));
         s.push_str(&format!("{}sc.GraphRegion = 0;\n", prefix));
@@ -237,7 +247,18 @@ fn gen_constructor(config: &Study, depth: i8) -> String {
         }
         s.push_str(&format!("{}SCSFBase(sc) {{}};\n", prefix));
     }
-    s.push_str(&format!("{}}}\n", prefix));
+    s
+}
+
+fn gen_methods_decl(config: &Study, depth: i8) -> String {
+    let mut s = String::new();
+
+    s.push_str(&format!(
+        "{}bool debugEnabled() override {{ return true; }}\n",
+        indent(depth)
+    ));
+    s.push_str(&format!("{}void last_call() override;\n", indent(depth)));
+    s.push_str(&format!("{}void study() override;\n", indent(depth)));
     s
 }
 
@@ -246,7 +267,7 @@ struct Arguments {
     file: std::path::PathBuf,
 }
 
-fn main() {
+fn main() -> Result<(), std::io::Error> {
     let args = Arguments::parse();
     println!("{:#?}", args);
 
@@ -276,16 +297,25 @@ fn main() {
     //     ],
     // };
 
-    match serde_json::to_string_pretty(&config) {
-        Err(err) => eprintln!("Error: {:?}", err),
-        Ok(s) => println!("{}", s),
-    }
+    // match serde_json::to_string_pretty(&config) {
+    //     Err(err) => eprintln!("Error: {:?}", err),
+    //     Ok(s) => println!("{}", s),
+    // }
 
     let class = gen_class(&config);
 
     let mut header = args.file.clone();
     header.set_extension("h");
     println!("class file: {:?}", header);
-    let _main = gen_main(&config);
-    //println!("{}", class);
+    let mut hfile = File::create(header)?;
+    hfile.write_all(&class.into_bytes())?;
+
+    let mut main_file = args.file.clone();
+    main_file.set_extension("cpp");
+    if !main_file.exists() {
+        let main = gen_main(&config);
+        let mut out = File::create(main_file)?;
+        out.write_all(&main.into_bytes());
+    }
+    Ok(())
 }
