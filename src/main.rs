@@ -1,6 +1,9 @@
+use clap::Parser;
+use std::fs::read_to_string;
+use std::path::Path;
+
 mod study;
 
-use std::error::Error;
 use study::*;
 
 fn indent(depth: i8) -> String {
@@ -124,7 +127,7 @@ fn gen_defaults(config: &Study, depth: i8) -> String {
         ));
 
         for input in config.inputs.iter() {
-            s.push_str(&input_default(&input, depth + 1))
+            s.push_str(&input_default(&input, &prefix))
         }
         for graph in config.outputs.iter() {
             s.push_str(&format!(
@@ -141,11 +144,10 @@ fn gen_defaults(config: &Study, depth: i8) -> String {
     s
 }
 
-pub fn input_default(input: &Input, depth: i8) -> String {
+pub fn input_default(input: &Input, prefix: &str) -> String {
     let mut s = String::new();
-    let prefix = indent(depth);
 
-    match &input.sctype {
+    match &input.intype {
         InputType::Int(n) => s.push_str(&format!(
             "{}input_default_int({}, \"{}\", {});\n",
             prefix,
@@ -239,28 +241,51 @@ fn gen_constructor(config: &Study, depth: i8) -> String {
     s
 }
 
+#[derive(Parser, Debug, Default)]
+struct Arguments {
+    file: std::path::PathBuf,
+}
+
 fn main() {
-    let config = Study {
-        name: "TestStudy".to_string(),
-        description: "A new study from \"generated code".to_string(),
-        inputs: vec![
-            Input {
-                label: "ma_length".to_string(),
-                name: "Length".to_string(),
-                sctype: InputType::Int(1),
-                description: "This is a length of the moving average lookback.".to_string(),
-            },
-            Input {
-                label: "ma_type".to_string(),
-                name: "Moving Average Type".to_string(),
-                sctype: InputType::MovingAvg("MOVAGGTYPE_EXPONENTIAL".to_string()),
-                description: "The type of the moving average.".to_string(),
-            },
-        ],
-        outputs: vec![
-            Output::new("ma1".to_string(), "Moving Average".to_string()),
-            Output::new("ma2".to_string(), String::new()),
-        ],
-    };
-    println!("{}", gen_class(&config));
+    let args = Arguments::parse();
+    println!("{:#?}", args);
+
+    let config = read_to_string(&args.file).unwrap();
+    let config: Study = serde_json::from_str(&config).unwrap();
+
+    // let config = Study {
+    //     name: "TestStudy".to_string(),
+    //     description: "A new study from \"generated code".to_string(),
+    //     inputs: vec![
+    //         Input {
+    //             label: "ma_length".to_string(),
+    //             name: "Length".to_string(),
+    //             intype: InputType::Int(1),
+    //             description: "This is a length of the moving average lookback.".to_string(),
+    //         },
+    //         Input {
+    //             label: "ma_type".to_string(),
+    //             name: "Moving Average Type".to_string(),
+    //             intype: InputType::MovingAvg("MOVAVGTYPE_EXPONENTIAL".to_string()),
+    //             description: "The type of the moving average.".to_string(),
+    //         },
+    //     ],
+    //     outputs: vec![
+    //         Output::new("ma1".to_string(), "Moving Average".to_string()),
+    //         Output::new("ma2".to_string(), String::new()),
+    //     ],
+    // };
+
+    match serde_json::to_string_pretty(&config) {
+        Err(err) => eprintln!("Error: {:?}", err),
+        Ok(s) => println!("{}", s),
+    }
+
+    let class = gen_class(&config);
+
+    let mut header = args.file.clone();
+    header.set_extension("h");
+    println!("class file: {:?}", header);
+    let _main = gen_main(&config);
+    //println!("{}", class);
 }

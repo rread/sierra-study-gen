@@ -1,3 +1,6 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
 pub struct Study {
     pub name: String,
     pub description: String,
@@ -5,11 +8,12 @@ pub struct Study {
     pub outputs: Vec<Output>,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Input {
     pub label: String,
     pub name: String,
     pub description: String,
-    pub sctype: InputType,
+    pub intype: InputType,
 }
 
 impl Input {
@@ -21,6 +25,9 @@ impl Input {
         format!("IN_{}_IDX", self.label.to_ascii_uppercase())
     }
 }
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+// #[serde(tag = "type", content = "args")]
 pub enum InputType {
     Int(i32),
     Float(f32),
@@ -30,6 +37,7 @@ pub enum InputType {
     Selection(String),
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Output {
     pub label: String,
     pub name: String,

@@ -1,0 +1,45 @@
+{
+  "name": "TestStudy",
+  "description": "A new study from \"generated\" code",
+  "inputs": [
+    {
+      "label": "ma_length",
+      "name": "Length",
+      "description": "This is a length of the moving average lookback.",
+      "intype": {
+        "Int": 1
+      }
+    },
+    {
+      "label": "ma_type",
+      "name": "Moving Average Type",
+      "description": "The type of the moving average.",
+      "intype": {
+        "MovingAvg": "MOVAVGTYPE_EXPONENTIAL"
+      }
+    }
+  ],
+  "outputs": [
+    {
+      "label": "ma1",
+      "name": "Moving Average",
+      "color": "RGB(0, 255, 0)",
+      "width": 1,
+      "style": "Line"
+    },
+    {
+      "label": "ma2",
+      "name": "",
+      "color": "RGB(0, 255, 0)",
+      "width": 1,
+      "style": "Line"
+    },
+    {
+      "label": "vol_speed_sd",
+      "name": "Volume Speed Volatility",
+      "color": "RGB(0, 255, 0)",
+      "width": 5,
+      "style": "Bar"
+    }
+  ]
+}
