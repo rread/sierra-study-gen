@@ -4,6 +4,12 @@ use serde::{Deserialize, Serialize};
 pub struct Study {
     pub name: String,
     pub description: String,
+    #[serde(default)]
+    pub region: i8,
+    #[serde(default)]
+    pub autoloop: bool,
+    #[serde(default)]
+    pub enable_extra_data: bool,
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
 }
@@ -47,15 +53,15 @@ pub struct Output {
 }
 
 impl Output {
-    pub fn new(label: String, name: String) -> Self {
-        Self {
-            label,
-            name,
-            color: "RGB(0, 255, 0)".to_string(),
-            width: 1,
-            style: "Line".to_string(),
-        }
-    }
+    // pub fn new(label: String, name: String) -> Self {
+    //     Self {
+    //         label,
+    //         name,
+    //         color: "RGB(0, 255, 0)".to_string(),
+    //         width: 1,
+    //         style: "Line".to_string(),
+    //     }
+    // }
 
     pub fn var_name(&self) -> String {
         format!("sg_{}", self.label)
@@ -67,9 +73,13 @@ impl Output {
 
     pub fn sc_style(&self) -> String {
         if self.name.is_empty() {
-            String::from("DRAWSTYLE_IGNORE")
-        } else {
-            String::from("DRAWSTYLE_LINE")
+            return String::from("DRAWSTYLE_IGNORE");
+        }
+
+        match self.style.as_str() {
+            "Line" => String::from("DRAWSTYLE_LINE"),
+            "Bar" => String::from("DRAWSTYLE_BAR"),
+            "Ignore" | "" | _ => String::from("DRAWSTYLE_IGNORE"),
         }
     }
 }

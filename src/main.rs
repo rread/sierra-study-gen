@@ -1,8 +1,6 @@
 use clap::Parser;
-use std::convert::Infallible;
 use std::fs::{read_to_string, File};
 use std::io::Write;
-use std::path::Path;
 
 mod study;
 
@@ -129,17 +127,23 @@ fn gen_defaults(config: &Study, depth: i8) -> String {
             prefix,
             escape_str(&config.description),
         ));
-        s.push_str(&format!("{}sc.AutoLoop = 0;\n", prefix));
-        s.push_str(&format!("{}sc.GraphRegion = 0;\n", prefix));
         s.push_str(&format!(
-            "{}sc.MaintainAdditionalChartDataArrays = 0;\n",
-            prefix
+            "{}sc.AutoLoop = {};\n",
+            prefix,
+            if config.autoloop { 1 } else { 0 },
+        ));
+        s.push_str(&format!("{}sc.GraphRegion = {};\n", prefix, config.region));
+        s.push_str(&format!(
+            "{}sc.MaintainAdditionalChartDataArrays = {};\n",
+            prefix,
+            if config.enable_extra_data { 1 } else { 0 },
         ));
 
         for input in config.inputs.iter() {
             s.push_str(&input_default(&input, &prefix))
         }
         for graph in config.outputs.iter() {
+            s.push_str("\n");
             s.push_str(&format!(
                 "{}subgraph_default({}, \"{}\", {}, {});\n",
                 prefix,
@@ -148,6 +152,14 @@ fn gen_defaults(config: &Study, depth: i8) -> String {
                 graph.sc_style(),
                 graph.color
             ));
+            if graph.width != 1 {
+                s.push_str(&format!(
+                    "{}{}.LineWidth = {};\n",
+                    prefix,
+                    graph.var_name(),
+                    graph.width,
+                ));
+            }
         }
     }
     s.push_str(&format!("{}}}\n", prefix));
@@ -156,6 +168,7 @@ fn gen_defaults(config: &Study, depth: i8) -> String {
 
 pub fn input_default(input: &Input, prefix: &str) -> String {
     let mut s = String::new();
+    s.push_str("\n");
 
     match &input.intype {
         InputType::Int(n) => s.push_str(&format!(
@@ -250,7 +263,7 @@ fn gen_constructor(config: &Study, depth: i8) -> String {
     s
 }
 
-fn gen_methods_decl(config: &Study, depth: i8) -> String {
+fn gen_methods_decl(_config: &Study, depth: i8) -> String {
     let mut s = String::new();
 
     s.push_str(&format!(
@@ -315,7 +328,7 @@ fn main() -> Result<(), std::io::Error> {
     if !main_file.exists() {
         let main = gen_main(&config);
         let mut out = File::create(main_file)?;
-        out.write_all(&main.into_bytes());
+        out.write_all(&main.into_bytes())?;
     }
     Ok(())
 }
