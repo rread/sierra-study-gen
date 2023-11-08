@@ -47,7 +47,11 @@ SCSFExport scsf_{}Main(SCStudyInterfaceRef sc) {{
     study.run();
 }}
     "#,
-        config.name, config.name, config.name, config.name, config.name,
+        config.class_name(),
+        config.class_name(),
+        config.class_name(),
+        config.class_name(),
+        config.class_name(),
     )
 }
 
@@ -60,9 +64,9 @@ fn gen_class(config: &Study) -> String {
 #include "SCSFBase.h"
 
 class {} : public SCSFBase {{"#,
-        config.name.to_ascii_uppercase(),
-        config.name.to_ascii_uppercase(),
-        config.name,
+        config.def_name(),
+        config.def_name(),
+        config.class_name(),
     );
 
     s.push_str(&gen_input_defs(&config.inputs, 1));
@@ -70,11 +74,9 @@ class {} : public SCSFBase {{"#,
     s.push_str(&gen_defaults(&config, 1));
     s.push_str(&gen_constructor(&config, 1));
     s.push_str(&gen_methods_decl(&config, 1));
+    s.push_str(&gen_private_class(&config, 1));
 
-    s.push_str(&format!(
-        "}};\n#endif // ACS_{}_H\n",
-        config.name.to_ascii_uppercase()
-    ));
+    s.push_str(&format!("}};\n#endif // ACS_{}_H\n", config.def_name()));
     s
 }
 
@@ -138,6 +140,12 @@ fn gen_defaults(config: &Study, depth: i8) -> String {
             prefix,
             if config.enable_extra_data { 1 } else { 0 },
         ));
+        if config.pointer_events {
+            s.push_str(&format!(
+                "{}sc.ReceivePointerEvents = ACS_RECEIVE_POINTER_EVENTS_WHEN_ACS_BUTTON_ENABLED;\n",
+                prefix,
+            ));
+        }
 
         for input in config.inputs.iter() {
             s.push_str(&input_default(&input, &prefix))
@@ -149,7 +157,7 @@ fn gen_defaults(config: &Study, depth: i8) -> String {
                 prefix,
                 graph.var_name(),
                 graph.name,
-                graph.sc_style(),
+                graph.style,
                 graph.color
             ));
             if graph.width != 1 {
@@ -158,6 +166,27 @@ fn gen_defaults(config: &Study, depth: i8) -> String {
                     prefix,
                     graph.var_name(),
                     graph.width,
+                ));
+            }
+            if let Some(second_color) = &graph.second_color {
+                s.push_str(&format!(
+                    "{}{}.SecondaryColorUsed = TRUE;\n",
+                    prefix,
+                    graph.var_name(),
+                ));
+                s.push_str(&format!(
+                    "{}{}.SecondaryColor = {};\n",
+                    prefix,
+                    graph.var_name(),
+                    second_color,
+                ));
+            }
+            if let Some(auto_color) = &graph.auto_color {
+                s.push_str(&format!(
+                    "{}{}.AutoColoring = {};\n",
+                    prefix,
+                    graph.var_name(),
+                    auto_color,
                 ));
             }
         }
@@ -179,7 +208,7 @@ pub fn input_default(input: &Input, prefix: &str) -> String {
             n,
         )),
         InputType::Float(n) => s.push_str(&format!(
-            "{}input_default_float({}, \"{}\", {});\n",
+            "{}input_default_float({}, \"{}\", {}f);\n",
             prefix,
             input.var_name(),
             input.name,
@@ -214,11 +243,18 @@ pub fn input_default(input: &Input, prefix: &str) -> String {
             ));
         }
         InputType::Selection(values) => s.push_str(&format!(
-            "{}input_default_select({}, \"{}\", {})",
+            "{}input_default_select({}, \"{}\", \"{}\");\n",
             prefix,
             input.var_name(),
             input.name,
             values
+        )),
+        InputType::Data(default) => s.push_str(&format!(
+            "{}input_default_data({}, \"{}\", SC_{});\n",
+            prefix,
+            input.var_name(),
+            input.name,
+            default.to_ascii_uppercase(),
         )),
     }
     s.push_str(&format!(
@@ -237,7 +273,8 @@ fn gen_constructor(config: &Study, depth: i8) -> String {
     s.push_str(&format!("{}public:\n", indent(depth - 1)));
     s.push_str(&format!(
         "{}explicit {}(SCStudyInterfaceRef sc) :\n",
-        prefix, config.name
+        prefix,
+        config.class_name()
     ));
     {
         let prefix = indent(depth + 1);
@@ -275,6 +312,14 @@ fn gen_methods_decl(_config: &Study, depth: i8) -> String {
     s
 }
 
+fn gen_private_class(config: &Study, depth: i8) -> String {
+    let mut s = String::new();
+    if let Some(name) = &config.private_class {
+        s.push_str(&format!("private:\n{}class {};\n", indent(depth), name));
+    }
+    s
+}
+
 #[derive(Parser, Debug, Default)]
 struct Arguments {
     file: std::path::PathBuf,
@@ -282,50 +327,23 @@ struct Arguments {
 
 fn main() -> Result<(), std::io::Error> {
     let args = Arguments::parse();
-    println!("{:#?}", args);
+    // println!("{:#?}", args);
 
     let config = read_to_string(&args.file).unwrap();
     let config: Study = serde_json::from_str(&config).unwrap();
-
-    // let config = Study {
-    //     name: "TestStudy".to_string(),
-    //     description: "A new study from \"generated code".to_string(),
-    //     inputs: vec![
-    //         Input {
-    //             label: "ma_length".to_string(),
-    //             name: "Length".to_string(),
-    //             intype: InputType::Int(1),
-    //             description: "This is a length of the moving average lookback.".to_string(),
-    //         },
-    //         Input {
-    //             label: "ma_type".to_string(),
-    //             name: "Moving Average Type".to_string(),
-    //             intype: InputType::MovingAvg("MOVAVGTYPE_EXPONENTIAL".to_string()),
-    //             description: "The type of the moving average.".to_string(),
-    //         },
-    //     ],
-    //     outputs: vec![
-    //         Output::new("ma1".to_string(), "Moving Average".to_string()),
-    //         Output::new("ma2".to_string(), String::new()),
-    //     ],
-    // };
-
-    // match serde_json::to_string_pretty(&config) {
-    //     Err(err) => eprintln!("Error: {:?}", err),
-    //     Ok(s) => println!("{}", s),
-    // }
 
     let class = gen_class(&config);
 
     let mut header = args.file.clone();
     header.set_extension("h");
-    println!("class file: {:?}", header);
+    println!("updated header: {:?}", header);
     let mut hfile = File::create(header)?;
     hfile.write_all(&class.into_bytes())?;
 
     let mut main_file = args.file.clone();
     main_file.set_extension("cpp");
     if !main_file.exists() {
+        println!("creating class file: {:?}", main_file);
         let main = gen_main(&config);
         let mut out = File::create(main_file)?;
         out.write_all(&main.into_bytes())?;
